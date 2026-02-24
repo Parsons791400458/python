@@ -16,15 +16,23 @@ import {
   Presentation,
   Hash,
   Sparkles,
-  Zap
+  Zap,
+  ArrowRight,
+  Link
 } from "lucide-react";
+
+import type { Backlink } from "@/lib/graph";
 
 export default function StructuredReader({ 
   card, 
-  onPresent 
+  backlinks = [],
+  onPresent,
+  onOpenCard
 }: { 
   card: CardDoc; 
-  onPresent?: () => void 
+  backlinks?: Backlink[];
+  onPresent?: () => void;
+  onOpenCard?: (id: string) => void;
 }) {
   const sections = [
     { id: "core", icon: Target, title: "核心观点", color: "text-blue-600" },
@@ -92,6 +100,35 @@ export default function StructuredReader({
                       <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
                         检测到文中包含与 <span className="text-primary font-medium">{cat.members.slice(0, 3).join("、")}</span> 等相关的专业表述，已自动关联至该本体。
                       </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Backlinks Panel */}
+            {backlinks.length > 0 && (
+              <div className="pt-8 space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary/60 uppercase tracking-widest">
+                  <Link className="w-3 h-3" /> 被以下内容引用 ({backlinks.length})
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  {backlinks.map((link, idx) => (
+                    <div 
+                      key={idx} 
+                      onClick={() => onOpenCard?.(link.sourceId)}
+                      className="group p-4 rounded-xl border border-border/40 bg-white hover:bg-slate-50 hover:shadow-md transition-all cursor-pointer ring-1 ring-black/5"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-bold text-slate-800 group-hover:text-primary transition-colors flex items-center gap-2">
+                          <Hash className="w-3 h-3 text-slate-400" />
+                          {link.sourceTitle}
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-slate-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                      </div>
+                      <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-border/30 font-mono">
+                        "{link.context}"
+                      </div>
                     </div>
                   ))}
                 </div>

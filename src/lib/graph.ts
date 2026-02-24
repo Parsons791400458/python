@@ -29,22 +29,34 @@ function norm(s: string) {
     .toLowerCase();
 }
 
-function extractLinkCandidates(md: string): string[] {
+function extractLinkCandidates(md: string): { text: string; context: string }[] {
   const lines = md.split(/\r?\n/);
-  const start = lines.findIndex((l) => l.trim() === "## 关联链接");
+  // 查找 "## 关联链接" 或者 "## 相关卡片"
+  const start = lines.findIndex((l) => /##\s+(关联链接|相关卡片)/.test(l.trim()));
   if (start === -1) return [];
-  const slice = lines.slice(start, Math.min(lines.length, start + 80));
-  const bullets = slice
-    .filter((l) => /^-\s+/.test(l.trim()))
-    .map((l) => l.replace(/^\s*-\s+/, "").trim())
-    .filter((x) => x && x !== "（缺）");
+  
+  // 仅扫描该标题下的列表项，直到遇到下一个标题或结束
+  const candidates: { text: string; context: string }[] = [];
+  
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith("#")) break; // 遇到下一个标题，停止
+    if (!line.startsWith("-") && !line.startsWith("*")) continue; // 只看列表项
 
-  // split by separators
-  return bullets
-    .flatMap((b) => b.split(/，|,|、|\||\/|；|;|→|->/g))
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+    const content = line.replace(/^[\-\*]\s+/, "").trim();
+    if (!content || content === "（缺）") continue;
+
+    // 分割多个链接 (简单的逗号/分号分隔)
+    const parts = content.split(/，|,|、|\||\/|；|;|→|->/g);
+    for (const part of parts) {
+      const p = part.trim();
+      if (p) {
+        candidates.push({ text: p, context: content });
+      }
+    }
+  }
+
+  return candidates.slice(0, 20);
 }
 
 export function buildKnowledgeGraph(cards: CardDoc[], opts?: { maxModules?: number; enableCardLinks?: boolean }) {
@@ -105,7 +117,7 @@ export function buildKnowledgeGraph(cards: CardDoc[], opts?: { maxModules?: numb
     const edgeSet = new Set<string>();
     for (const c of cards) {
       const candidates = extractLinkCandidates(c.content);
-      for (const cand of candidates) {
+      for (const { text: cand } of candidates) {
         const cn = norm(cand);
         if (!cn || cn.length < 4) continue;
 
@@ -128,4 +140,57 @@ export function buildKnowledgeGraph(cards: CardDoc[], opts?: { maxModules?: numb
   }
 
   return { nodes, links, modules };
+}
+
+export interface Backlink {
+  sourceId: string;
+  sourceTitle: string;
+  context: string;
+}
+
+export function getBacklinksIndex(cards: CardDoc[]): Map<string, Backlink[]> {
+  const index = new Map<string, Backlink[]>();
+  const titleIndex = new Map<string, string>();
+  
+  // 建立标题索引
+  for (const c of cards) titleIndex.set(norm(c.title), c.id);
+  
+  // 模糊索引
+  const fuzzyIndex: Array<{ key: string; id: string }> = [];
+  for (const c of cards) {
+    const n = norm(c.title);
+    if (n.length >= 4) fuzzyIndex.push({ key: n, id: c.id });
+  }
+
+  for (const sourceCard of cards) {
+    const candidates = extractLinkCandidates(sourceCard.content);
+    
+    for (const { text, context } of candidates) {
+      const cn = norm(text);
+      if (!cn || cn.length < 2) continue;
+
+      let targetId = titleIndex.get(cn);
+      if (!targetId) {
+        // 尝试模糊匹配
+        const hit = fuzzyIndex.find((t) => t.key.includes(cn) || cn.includes(t.key));
+        targetId = hit?.id;
+      }
+
+      if (targetId && targetId !== sourceCard.id) {
+        if (!index.has(targetId)) index.set(targetId, []);
+        
+        // 避免重复添加同一个源
+        const list = index.get(targetId)!;
+        if (!list.some(bl => bl.sourceId === sourceCard.id)) {
+          list.push({
+            sourceId: sourceCard.id,
+            sourceTitle: sourceCard.title,
+            context: context
+          });
+        }
+      }
+    }
+  }
+
+  return index;
 }

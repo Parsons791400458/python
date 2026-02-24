@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import hero from "@/assets/hero.jpeg";
 
 import { cards as allCards, allTags, type CardDoc, type CardType, type OutputReady } from "@/lib/cards";
-import { buildKnowledgeGraph } from "@/lib/graph";
+import { buildKnowledgeGraph, getBacklinksIndex } from "@/lib/graph";
 
 import AppShell from "@/components/AppShell";
 import CommandPalette from "@/components/CommandPalette";
@@ -101,6 +101,7 @@ export default function Home() {
   }, [active, activeId]);
 
   const graph = useMemo(() => buildKnowledgeGraph(allCards, { maxModules: 14 }), []);
+  const backlinksIndex = useMemo(() => getBacklinksIndex(allCards), []);
 
   const onSelectCard = (id: string) => {
     setActiveId(id);
@@ -227,7 +228,12 @@ export default function Home() {
                 {/* Reader Panel */}
                 <div className="flex-1 min-w-0 bg-white overflow-hidden flex flex-col">
                   {active ? (
-                    <StructuredReader card={active} onPresent={() => setIsPresenting(true)} />
+                    <StructuredReader 
+                      card={active} 
+                      backlinks={backlinksIndex.get(active.id)}
+                      onPresent={() => setIsPresenting(true)} 
+                      onOpenCard={onSelectCard}
+                    />
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-center p-20 text-center space-y-4 opacity-30">
                       <LayoutGrid className="w-12 h-12" />
